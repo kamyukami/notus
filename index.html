@@ -26,7 +26,8 @@ button,.btn{font:inherit;color:inherit;background:none;border:0;border-radius:0;
 button:disabled{opacity:.3}
 button:focus-visible,.btn:focus-within{outline:2px solid var(--fg);outline-offset:-2px}
 #file{position:fixed;left:-100px;top:0;width:1px;height:1px;opacity:0;pointer-events:none}
-.screen{height:100%;display:flex;flex-direction:column}
+.screen{height:100%;height:100dvh;display:flex;flex-direction:column}
+.screen:not(.ready) .top{display:none}
 .cap{text-transform:uppercase;letter-spacing:.08em}
 
 .top{display:flex;align-items:stretch;height:48px;background:var(--panel);padding:env(safe-area-inset-top,0px) max(8px,env(safe-area-inset-right,0px)) 0 max(8px,env(safe-area-inset-left,0px));box-sizing:content-box}
@@ -99,7 +100,7 @@ button:focus-visible,.btn:focus-within{outline:2px solid var(--fg);outline-offse
 <body>
 <div class="screen" id="editScreen">
   <input type="file" id="file" accept="image/*">
-  <div class="top">
+  <div class="top" id="topBar">
     <label class="btn" for="file" id="change" hidden>Photo</label>
     <button type="button" id="cancel" hidden>Annuler</button>
     <span class="sp"></span>
@@ -760,6 +761,7 @@ import * as ort from './vendor/ort.wasm.bundle.min.mjs';
       console.info(`détection ${Math.round(t1 - t0)} ms · contours ${Math.round(t2 - t1)} ms`);
       for (const id of ['empty']) $(id).hidden = true;
       for (const id of ['view', 'change', 'undo', 'redo', 'reset', 'bottom']) $(id).hidden = false;
+      $('editScreen').classList.add('ready');
       for (const f of faces) f.m = null;
       if (manual) exitManual(false);
       full = false; $('editScreen').classList.remove('full'); cur.reglages = 0; openDrawer('Reglages'); fit(); render();
@@ -796,6 +798,8 @@ import * as ort from './vendor/ort.wasm.bundle.min.mjs';
     document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   });
 
+  const pin = () => { if (scrollX || scrollY) scrollTo(0, 0); };
+  addEventListener('scroll', pin, { passive: true }); visualViewport && visualViewport.addEventListener('resize', pin);
   loadModel().catch(err => { $('pickMsg').textContent = 'Chargement du modèle impossible : ' + (err && err.message || err); $('pickMsg').classList.add('err'); });
 })();
 </script>

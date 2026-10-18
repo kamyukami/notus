@@ -3,28 +3,32 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#111111">
+<meta name="theme-color" content="#1f1f1f" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#e4e4e4" media="(prefers-color-scheme: light)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Notus">
-<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);box-sizing:border-box;height:100%}body{margin:0}[hidden]{display:none!important}</style>
+<style>body{margin:0}[hidden]{display:none!important}</style>
 <title>Notus</title>
 <style>
 /* Brut: one dark screen, no page scroll. 8 px grid, 16 px gutter, no radius, no shadow, no gradient but the hues.
    Rows: top 48 · photo (flex) · drawer 128 (menu 48 + 8 + dial 56 + 16) · bottom 48. Four greys only. */
-:root{--bg:#111111;--panel:#1f1f1f;--fg:#f2f2f2;--muted:#c4c4c4;--accent:#f2f2f2;--on:#111111;--mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;color-scheme:dark}
+:root{--bg:#111111;--panel:#1f1f1f;--fg:#f2f2f2;--muted:#c4c4c4;--accent:#f2f2f2;--on:#111111;--shade:rgba(17,17,17,.9);--mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;color-scheme:dark}
+/* light mode, same rule: two very light greys, two very dark */
+@media (prefers-color-scheme:light){:root{--bg:#f2f2f2;--panel:#e4e4e4;--fg:#111111;--muted:#3a3a3a;--accent:#111111;--on:#f2f2f2;--shade:rgba(242,242,242,.92);color-scheme:light}}
 [hidden]{display:none!important}
-html,body{height:100%;overflow:hidden}
-body{background:var(--bg);color:var(--fg);font:14px/1.3 var(--mono);padding-left:max(0px,env(safe-area-inset-left,0px));padding-right:max(0px,env(safe-area-inset-right,0px))}
+html,body{height:100%;overflow:hidden;overscroll-behavior:none}
+body{position:fixed;inset:0;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+body{background:var(--bg);color:var(--fg);font:14px/1.3 var(--mono)}
 button,.btn{font:inherit;color:inherit;background:none;border:0;border-radius:0;padding:0;margin:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
 button:disabled{opacity:.3}
 button:focus-visible,.btn:focus-within{outline:2px solid var(--fg);outline-offset:-2px}
-#file{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+#file{position:fixed;left:-100px;top:0;width:1px;height:1px;opacity:0;pointer-events:none}
 .screen{height:100%;display:flex;flex-direction:column}
 .cap{text-transform:uppercase;letter-spacing:.08em}
 
-.top{display:flex;align-items:stretch;height:48px;background:var(--panel);padding:0 8px}
+.top{display:flex;align-items:stretch;height:48px;background:var(--panel);padding:env(safe-area-inset-top,0px) max(8px,env(safe-area-inset-right,0px)) 0 max(8px,env(safe-area-inset-left,0px));box-sizing:content-box}
 .top .sp{flex:1}
 .top .btn,.top button{display:flex;align-items:center;padding:0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.08em}
 .top .ico{font-size:18px;letter-spacing:0;min-width:40px;justify-content:center}
@@ -41,7 +45,7 @@ button:focus-visible,.btn:focus-within{outline:2px solid var(--fg);outline-offse
 .photo .tip.on{opacity:1}
 
 /* analysis: dark screen, the word and three squares pulsing (opacity only, so it keeps moving while the detector runs) */
-#busy{position:fixed;inset:0;z-index:40;background:rgba(17,17,17,.9);display:flex;align-items:center;justify-content:center;gap:16px;font-size:14px;text-transform:uppercase;letter-spacing:.1em}
+#busy{position:fixed;inset:0;z-index:40;background:var(--shade);display:flex;align-items:center;justify-content:center;gap:16px;font-size:14px;text-transform:uppercase;letter-spacing:.1em}
 #busy .dots{display:flex;gap:6px}
 #busy .dots i{width:8px;height:8px;background:var(--fg);animation:pulse 1s infinite}
 #busy .dots i:nth-child(2){animation-delay:.2s}
@@ -49,9 +53,9 @@ button:focus-visible,.btn:focus-within{outline:2px solid var(--fg);outline-offse
 @keyframes pulse{0%,80%,100%{opacity:.15}40%{opacity:1}}
 @media (prefers-reduced-motion:reduce){#busy .dots i{animation:none;opacity:1}}
 /* option wheel: strong shade; entries slide behind the menu row, the current one on it */
-#shade{position:fixed;inset:0;background:rgba(17,17,17,.9);z-index:30;pointer-events:none}
+#shade{position:fixed;inset:0;background:var(--shade);z-index:30;pointer-events:none}
 #wheel{position:fixed;inset:0;z-index:31;pointer-events:none;overflow:hidden}
-#wheelItems{position:absolute;left:0;right:0;top:0;transform:translateY(var(--y,0));transition:transform .12s ease-out}
+#wheelItems{position:absolute;left:var(--x,0px);width:var(--w,100%);top:0;transform:translateY(var(--y,0));transition:transform .12s ease-out}
 #wheelItems div{height:48px;display:flex;align-items:center;padding:0 16px 0 44px;font-size:14px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
 #wheelItems div.cur{background:var(--fg);color:var(--on)}
 .picking .sl .dial,.picking .sl .menu{visibility:hidden}
@@ -59,12 +63,23 @@ button:focus-visible,.btn:focus-within{outline:2px solid var(--fg);outline-offse
 .drawer{height:128px;box-sizing:border-box;overflow:hidden;background:var(--panel);padding:0 16px 16px}
 #drExport{display:grid;grid-template-rows:48px 48px auto;gap:8px;padding-top:16px;align-content:start}
 #drReglages,#drRendu{touch-action:none;user-select:none;-webkit-user-select:none}
-.bottom{display:grid;grid-template-columns:repeat(3,1fr);height:48px;background:var(--panel);border-top:1px solid var(--bg);padding-bottom:env(safe-area-inset-bottom,0px);box-sizing:content-box}
+.bottom{display:grid;grid-template-columns:repeat(3,1fr);height:48px;background:var(--panel);border-top:1px solid var(--bg);padding:0 env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px);box-sizing:content-box}
 .bottom button{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
 .bottom button[aria-pressed="true"]{color:var(--fg);box-shadow:inset 0 2px 0 var(--fg)}
 .bottom.one{grid-template-columns:1fr}
 .bottom.one button{background:var(--fg);color:var(--on);font-weight:700;letter-spacing:.1em}
 .full .top,.full .drawer,.full .bottom{display:none!important}
+/* landscape: photo on the left, controls stacked in a 320 px column on the right */
+@media (orientation:landscape) and (max-height:600px){
+  .screen{display:grid;grid-template-columns:1fr calc(320px + env(safe-area-inset-right,0px));grid-template-rows:auto 1fr auto auto}
+  .top{grid-column:2;grid-row:1;padding-left:8px}
+  .photo{grid-column:1;grid-row:1/5;padding-left:max(8px,env(safe-area-inset-left,0px))}
+  .drawer{grid-column:2;grid-row:3;padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .bottom{grid-column:2;grid-row:4;padding-left:0}
+  .empty{grid-column:1/3}
+  .full .photo,.manual .photo{grid-column:1/3}
+  .manual .top{grid-column:2}
+}
 
 /* --- dial --- */
 .sl{display:grid;grid-template-rows:48px 56px;gap:8px;touch-action:none;user-select:none;-webkit-user-select:none}
@@ -215,14 +230,16 @@ import * as ort from './vendor/ort.wasm.bundle.min.mjs';
 
   // Haptics: a real tick on each notch — vibrate() where it exists (Android), the iOS switch-toggle trick otherwise.
   // iOS has no vibration API: clicking the label of a native switch makes Safari (18+) play its system tick.
+  // Progressive: notches in quick succession build up (Android: longer pulses). iOS only offers one fixed tick.
   const hap = (() => {
-    let last = 0;
-    const label = document.createElement('label'), sw = document.createElement('input');
-    sw.type = 'checkbox'; sw.setAttribute('switch', ''); label.append(sw); label.style.display = 'none'; label.ariaHidden = 'true';
-    document.head.append(label);
+    let last = 0, streak = 0;
     return () => {
-      const t = performance.now(); if (t - last < 35) return; last = t;
-      if (navigator.vibrate) navigator.vibrate(6); else label.click();
+      const t = performance.now(); if (t - last < 30) return;
+      streak = t - last < 160 ? Math.min(streak + 1, 10) : 0; last = t;
+      if (navigator.vibrate) { navigator.vibrate(Math.round(4 + streak * 1.6)); return; }
+      const label = document.createElement('label'), sw = document.createElement('input');
+      sw.type = 'checkbox'; sw.setAttribute('switch', ''); label.append(sw); label.style.display = 'none'; label.ariaHidden = 'true';
+      document.head.append(label); label.click(); label.remove();
     };
   })();
   const notch = (o, v) => Math.round((v - o.min) / (o.max - o.min) * ticksOf(o));
@@ -352,7 +369,9 @@ import * as ort from './vendor/ort.wasm.bundle.min.mjs';
       for (const o of OPTS[c]) { const d = document.createElement('div'); d.textContent = o.label; items.append(d); }
     }
     [...items.children].forEach((d, j) => { d.className = j === i ? 'cur' : ''; });
-    wh.style.setProperty('--y', (r.top + (r.height - ROW) / 2 - i * ROW) + 'px');
+    const top = r.top + (r.height - ROW) / 2 - i * ROW, h = OPTS[c].length * ROW;   // aligned on the menu row, kept on screen
+    wh.style.setProperty('--y', Math.max(8, Math.min(top, innerHeight - h - 8)) + 'px');
+    wh.style.setProperty('--x', r.left + 'px'); wh.style.setProperty('--w', r.width + 'px');
     $('shade').hidden = false; wh.hidden = false; $('editScreen').classList.add('picking');
   }
   const hideWheel = () => { $('shade').hidden = true; $('wheel').hidden = true; $('editScreen').classList.remove('picking'); };

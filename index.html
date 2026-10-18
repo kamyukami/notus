@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="build" content="202610182226">
 <meta name="theme-color" content="#1f1f1f" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#e4e4e4" media="(prefers-color-scheme: light)">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -805,6 +806,16 @@ import * as ort from './vendor/ort.wasm.bundle.min.mjs';
     document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   });
 
+  // Home-screen apps keep serving a cached page: ask the server (bypassing caches) for the current build and reload when it differs.
+  const BUILD = document.querySelector('meta[name="build"]').content;
+  async function checkUpdate() {
+    try {
+      const t = await (await fetch('./?check=' + Date.now(), { cache: 'no-store' })).text();
+      const m = t.match(/name="build" content="([^"]+)"/);
+      if (m && m[1] !== BUILD && !base.width) location.replace('./?v=' + m[1]);   // never interrupt a photo being edited
+    } catch {}
+  }
+  checkUpdate(); document.addEventListener('visibilitychange', () => { if (!document.hidden) checkUpdate(); });
   const pin = () => { if (scrollX || scrollY) scrollTo(0, 0); };
   addEventListener('scroll', pin, { passive: true }); visualViewport && visualViewport.addEventListener('resize', pin);
   loadModel().catch(err => { $('pickMsg').textContent = 'Could not load the model: ' + (err && err.message || err); $('pickMsg').classList.add('err'); });

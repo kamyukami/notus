@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="build" content="202610182226">
+<meta name="build" content="202610182233">
 <meta name="theme-color" content="#1f1f1f" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#e4e4e4" media="(prefers-color-scheme: light)">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -64,7 +64,10 @@ button:focus-visible,.btn:focus-within{outline:2px solid var(--fg);outline-offse
 .picking .sl .dial,.picking .sl .menu{visibility:hidden}
 
 .drawer{height:128px;box-sizing:border-box;overflow:hidden;background:var(--panel);padding:0 16px 16px}
-#drExport{display:grid;grid-template-rows:48px 48px auto;gap:8px;padding-top:16px;align-content:start}
+/* export: same rows as the dials — the format choice sits where the menu title is, Save where the dial is */
+.sl .menu.fmt{padding:0;gap:0;cursor:default}
+.sl .menu.fmt button{flex:1;height:100%;color:var(--muted);font-size:14px;letter-spacing:.08em}
+.sl .menu.fmt button[aria-pressed="true"]{color:var(--fg);box-shadow:inset 0 -2px 0 var(--fg)}
 #drReglages,#drRendu{touch-action:none;user-select:none;-webkit-user-select:none}
 .bottom{display:grid;grid-template-columns:repeat(3,1fr);height:48px;background:var(--panel);border-top:1px solid var(--bg);padding:0 env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px);box-sizing:content-box}
 .bottom button{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
@@ -91,10 +94,6 @@ button:focus-visible,.btn:focus-within{outline:2px solid var(--fg);outline-offse
   display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--fg);pointer-events:none}
 .sl .dial:not(.list) .sel{background:var(--panel)}
 
-.choices{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
-.choices button{background:var(--bg);color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.08em}
-.choices button[aria-pressed="true"]{background:var(--fg);color:var(--on)}
-.primary{background:var(--fg);color:var(--on);font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.1em}
 .muted{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.08em;margin:0}
 </style>
 </head>
@@ -122,12 +121,10 @@ button:focus-visible,.btn:focus-within{outline:2px solid var(--fg);outline-offse
   <div class="drawer" id="drReglages" hidden><div class="sl" id="rSlider"></div></div>
   <div class="drawer" id="drRendu" hidden><div class="sl" id="tSlider"></div></div>
   <div class="drawer" id="drExport" hidden>
-    <div class="choices">
-      <button data-fmt="jpeg" aria-pressed="true">JPEG</button>
-      <button data-fmt="png" aria-pressed="false">PNG</button>
+    <div class="sl">
+      <div class="menu fmt"><button type="button" data-fmt="jpeg" aria-pressed="true">JPEG</button><button type="button" data-fmt="png" aria-pressed="false">PNG</button></div>
+      <button type="button" class="go" id="save">Save</button>
     </div>
-    <button type="button" class="primary" id="save">Save</button>
-    <p class="muted" id="saveMsg">No EXIF metadata.</p>
   </div>
 
   <div id="busy" hidden><span>Analysing</span><span class="dots"><i></i><i></i><i></i></span></div>
@@ -790,6 +787,7 @@ import * as ort from './vendor/ort.wasm.bundle.min.mjs';
     const b = e.target.closest('[data-fmt]'); if (!b) return;
     fmt = b.dataset.fmt; for (const x of $('drExport').querySelectorAll('[data-fmt]')) x.setAttribute('aria-pressed', x.dataset.fmt === fmt);
   });
+  const flash = msg => { const b = $('save'); b.textContent = msg; clearTimeout(flash.t); flash.t = setTimeout(() => { b.textContent = 'Save'; }, 1600); };   // result shown on the button itself
   $('save').addEventListener('click', async () => {
     // Re-render without the debug overlay, then hand the file over. Canvas export carries no EXIF.
     const boxes = state.boxes; state.boxes = 0; render(); state.boxes = boxes;
@@ -798,8 +796,8 @@ import * as ort from './vendor/ort.wasm.bundle.min.mjs';
     const filename = `notus.${fmt === 'png' ? 'png' : 'jpg'}`;
     const dl = window.claude ? await claude.use('downloads') : null;   // claude.ai viewer: share sheet / download prompt
     if (dl) {
-      try { await dl.save({ filename, data: blob }); $('saveMsg').textContent = 'Saved.'; }
-      catch (e) { $('saveMsg').textContent = e.code === 'declined' ? 'Cancelled.' : 'Could not save: ' + (e.message || e.code); }
+      try { await dl.save({ filename, data: blob }); flash('Saved'); }
+      catch (e) { flash(e.code === 'declined' ? 'Cancelled' : 'Could not save'); }
       return;
     }
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename;   // plain web: browser download

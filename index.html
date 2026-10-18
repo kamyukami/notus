@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -102,20 +102,20 @@ button:focus-visible,.btn:focus-within{outline:2px solid var(--fg);outline-offse
   <input type="file" id="file" accept="image/*">
   <div class="top" id="topBar">
     <label class="btn" for="file" id="change" hidden>Photo</label>
-    <button type="button" id="cancel" hidden>Annuler</button>
+    <button type="button" id="cancel" hidden>Cancel</button>
     <span class="sp"></span>
-    <button type="button" class="ico" id="undo" title="Annuler" disabled hidden>↶</button>
-    <button type="button" class="ico" id="redo" title="Rétablir" disabled hidden>↷</button>
-    <button type="button" id="reset" title="Réinitialiser" hidden>Reset</button>
+    <button type="button" class="ico" id="undo" title="Undo" disabled hidden>↶</button>
+    <button type="button" class="ico" id="redo" title="Redo" disabled hidden>↷</button>
+    <button type="button" id="reset" title="Reset all settings" hidden>Reset</button>
   </div>
 
   <div class="photo" id="photoArea">
     <div class="empty" id="empty">
-      <label class="pick" for="file" id="pickText">Choisir une photo</label>
-      <p id="pickMsg">Chaque visage est découpé sur son contour et masqué. Tout reste sur ton appareil.</p>
+      <label class="pick" for="file" id="pickText">Choose a photo</label>
+      <p id="pickMsg">Hide people’s identity and image metadata, right on your phone. Nothing is sent.</p>
     </div>
     <canvas id="view" hidden></canvas>
-    <div class="tip" id="tip">↕ options · ↔ régler</div>
+    <div class="tip" id="tip">↕ options · ↔ adjust</div>
   </div>
 
   <div class="drawer" id="drReglages" hidden><div class="sl" id="rSlider"></div></div>
@@ -125,17 +125,17 @@ button:focus-visible,.btn:focus-within{outline:2px solid var(--fg);outline-offse
       <button data-fmt="jpeg" aria-pressed="true">JPEG</button>
       <button data-fmt="png" aria-pressed="false">PNG</button>
     </div>
-    <button type="button" class="primary" id="save">Enregistrer</button>
-    <p class="muted" id="saveMsg">Sans métadonnées EXIF.</p>
+    <button type="button" class="primary" id="save">Save</button>
+    <p class="muted" id="saveMsg">No EXIF metadata.</p>
   </div>
 
-  <div id="busy" hidden><span>Analyse</span><span class="dots"><i></i><i></i><i></i></span></div>
+  <div id="busy" hidden><span>Analysing</span><span class="dots"><i></i><i></i><i></i></span></div>
   <div id="shade" hidden></div>
   <div id="wheel" hidden><div id="wheelItems"></div></div>
-  <div class="bottom one" id="manualBar" hidden><button type="button" id="validate">Valider</button></div>
+  <div class="bottom one" id="manualBar" hidden><button type="button" id="validate">Done</button></div>
   <div class="bottom" id="bottom" hidden>
-    <button type="button" data-dr="Reglages">Réglages</button>
-    <button type="button" data-dr="Rendu">Rendu</button>
+    <button type="button" data-dr="Reglages">Settings</button>
+    <button type="button" data-dr="Rendu">Style</button>
     <button type="button" data-dr="Export">Export</button>
   </div>
 </div>
@@ -160,32 +160,32 @@ import * as ort from './vendor/ort.wasm.bundle.min.mjs';
   const MULTI = 34, RAINBOW = 'linear-gradient(90deg,#f33,#fc0,#3c3,#09f,#90f)';
   const swatch = v => v === 0 ? '#fff' : v === 1 ? '#000' : hsl(HUES[v - 2]);     // v < MULTI
   const scale = (k, label) => ({ k, label, min: 0, max: MULTI, step: 1, list: true, num: v => String(v + 1),
-    desc: v => v === MULTI ? 'Multicolore' : v === 0 ? 'Blanc' : v === 1 ? 'Noir' : `Teinte ${v - 1}`, hues: [2, MULTI - 1],
+    desc: v => v === MULTI ? 'Multicolour' : v === 0 ? 'White' : v === 1 ? 'Black' : `Hue ${v - 1}`, hues: [2, MULTI - 1],
     chip: v => v === MULTI ? RAINBOW : swatch(v) });
-  const OVERLAYS = ['Aucun', 'Cadre', 'Contour', 'Points', 'Cadre + score', 'Tout'];   // debug overlays drawn on the masked faces
+  const OVERLAYS = ['None', 'Box', 'Outline', 'Points', 'Box + score', 'All'];   // debug overlays drawn on the masked faces
   // Every setting is one dial. Réglages is a list of them; Rendu is a list of styles, each one dial. Vertical drag moves through the list.
   // num: what the dial centre shows. desc: the full meaning, shown on the dial only while it is being adjusted.
   const OPTS = {
     reglages: [
       // Seuil: right = more faces (lower detector threshold); fully right takes every candidate.
       // Seuil counts faces: one notch per candidate, in order of detector confidence (most obvious first).
-      { k: 'nb', label: 'Seuil', min: 0, get max() { return Math.max(1, faces.length); }, step: 1, num: v => String(v) },
+      { k: 'nb', label: 'Threshold', min: 0, get max() { return Math.max(1, faces.length); }, step: 1, num: v => String(v) },
       // Marge 0…1 → contour × (0.7 + marge): 0.3 is the bare contour.
-      { k: 'marge', label: 'Marge', min: 0, max: 1, step: 0.1, num: v => v.toFixed(1) },
-      { k: 'boxes', label: 'Affichage', min: 0, max: 5, step: 1, list: true, num: v => String(v), desc: v => OVERLAYS[v] },
+      { k: 'marge', label: 'Margin', min: 0, max: 1, step: 0.1, num: v => v.toFixed(1) },
+      { k: 'boxes', label: 'Overlay', min: 0, max: 5, step: 1, list: true, num: v => String(v), desc: v => OVERLAYS[v] },
       // Manuel: a button instead of a dial; the photo goes full screen and tapping a face toggles its mask.
-      { k: 'manual', label: 'Manuel', button: 'Sélection' },
+      { k: 'manual', label: 'Manual', button: 'Select faces' },
     ],
     rendu: [
-      scale('couleur', 'Couleur'),
-      scale('carre', 'Carré'),
+      scale('couleur', 'Colour'),
+      scale('carre', 'Square'),
       // Bruit: left half = photo tint, right half = random colours; the outer notch of each half is the big grain.
-      { k: 'bruit', label: 'Bruit', min: 0, max: 3, step: 1, list: true, num: v => String(v + 1), desc: v => ['Photo · gros', 'Photo · fin', 'Couleurs · fin', 'Couleurs · gros'][v] },
+      { k: 'bruit', label: 'Noise', min: 0, max: 3, step: 1, list: true, num: v => String(v + 1), desc: v => ['Photo · coarse', 'Photo · fine', 'Colours · fine', 'Colours · coarse'][v] },
       { k: 'emoji', label: 'Emoji', min: 0, max: EMOJIS.length, step: 1, list: true, emoji: true,
-        num: v => v === EMOJIS.length ? '?' : EMOJIS[v], desc: v => v === EMOJIS.length ? 'Aléatoire' : `n° ${v + 1}` },
-      { k: 'lumiere', label: 'Lumière', min: -1, max: 1, step: 0.05, mid: 0,
-        num: v => (v > 0 ? '+' : '') + Math.round(v * 100), desc: v => v > 0 ? 'Lumière' : v < 0 ? 'Ténèbres' : 'Neutre' },
-      scale('neon', 'Néon'),
+        num: v => v === EMOJIS.length ? '?' : EMOJIS[v], desc: v => v === EMOJIS.length ? 'Random' : `No. ${v + 1}` },
+      { k: 'lumiere', label: 'Light', min: -1, max: 1, step: 0.05, mid: 0,
+        num: v => (v > 0 ? '+' : '') + Math.round(v * 100), desc: v => v > 0 ? 'Light' : v < 0 ? 'Dark' : 'Neutral' },
+      scale('neon', 'Neon'),
     ],
   };
   const STYLES = OPTS.rendu.map(o => o.k);
@@ -733,7 +733,7 @@ import * as ort from './vendor/ort.wasm.bundle.min.mjs';
       const url = URL.createObjectURL(file);
       const im = new Image();
       im.onload = () => { URL.revokeObjectURL(url); res(im); };
-      im.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Image illisible')); };
+      im.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Unreadable image')); };
       im.src = url;
     });
   }
@@ -765,7 +765,7 @@ import * as ort from './vendor/ort.wasm.bundle.min.mjs';
       state.nb = countFromSens(); state.sel = {};
       hist = []; hi = -1; commit();   // keep the current settings; only the history restarts with the new photo
       render();
-      console.info(`détection ${Math.round(t1 - t0)} ms · contours ${Math.round(t2 - t1)} ms`);
+      console.info(`detection ${Math.round(t1 - t0)} ms · contours ${Math.round(t2 - t1)} ms`);
       for (const id of ['empty']) $(id).hidden = true;
       for (const id of ['view', 'change', 'undo', 'redo', 'reset', 'bottom']) $(id).hidden = false;
       $('editScreen').classList.add('ready');
@@ -773,7 +773,7 @@ import * as ort from './vendor/ort.wasm.bundle.min.mjs';
       if (manual) exitManual(false);
       full = false; $('editScreen').classList.remove('full'); cur.reglages = 0; openDrawer('Reglages'); fit(); render();
     } catch (err) {
-      $('pickMsg').textContent = 'Erreur : ' + (err && err.message || err); $('pickMsg').classList.add('err'); $('empty').hidden = false; $('view').hidden = true;
+      $('pickMsg').textContent = 'Error: ' + (err && err.message || err); $('pickMsg').classList.add('err'); $('empty').hidden = false; $('view').hidden = true;
     }
     $('busy').hidden = true; $('file').value = '';
   }
@@ -794,11 +794,11 @@ import * as ort from './vendor/ort.wasm.bundle.min.mjs';
     const boxes = state.boxes; state.boxes = 0; render(); state.boxes = boxes;
     const blob = await new Promise(r => out.toBlob(r, fmt === 'png' ? 'image/png' : 'image/jpeg', 0.92));
     if (boxes) render();
-    const filename = `anonyme.${fmt === 'png' ? 'png' : 'jpg'}`;
+    const filename = `notus.${fmt === 'png' ? 'png' : 'jpg'}`;
     const dl = window.claude ? await claude.use('downloads') : null;   // claude.ai viewer: share sheet / download prompt
     if (dl) {
-      try { await dl.save({ filename, data: blob }); $('saveMsg').textContent = 'Enregistré.'; }
-      catch (e) { $('saveMsg').textContent = e.code === 'declined' ? 'Annulé.' : 'Enregistrement impossible : ' + (e.message || e.code); }
+      try { await dl.save({ filename, data: blob }); $('saveMsg').textContent = 'Saved.'; }
+      catch (e) { $('saveMsg').textContent = e.code === 'declined' ? 'Cancelled.' : 'Could not save: ' + (e.message || e.code); }
       return;
     }
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename;   // plain web: browser download
@@ -807,7 +807,7 @@ import * as ort from './vendor/ort.wasm.bundle.min.mjs';
 
   const pin = () => { if (scrollX || scrollY) scrollTo(0, 0); };
   addEventListener('scroll', pin, { passive: true }); visualViewport && visualViewport.addEventListener('resize', pin);
-  loadModel().catch(err => { $('pickMsg').textContent = 'Chargement du modèle impossible : ' + (err && err.message || err); $('pickMsg').classList.add('err'); });
+  loadModel().catch(err => { $('pickMsg').textContent = 'Could not load the model: ' + (err && err.message || err); $('pickMsg').classList.add('err'); });
 })();
 </script>
 

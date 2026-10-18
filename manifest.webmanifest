@@ -1,0 +1,9 @@
+{
+  "name": "Notus",
+  "short_name": "Notus",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#111111",
+  "theme_color": "#1f1f1f"
+}

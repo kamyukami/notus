@@ -178,6 +178,7 @@ import * as ort from './vendor/ort.wasm.bundle.min.mjs';
     ],
     rendu: [
       scale('couleur', 'Couleur'),
+      scale('carre', 'Carré'),
       // Bruit: left half = photo tint, right half = random colours; the outer notch of each half is the big grain.
       { k: 'bruit', label: 'Bruit', min: 0, max: 3, step: 1, list: true, num: v => String(v + 1), desc: v => ['Photo · gros', 'Photo · fin', 'Couleurs · fin', 'Couleurs · gros'][v] },
       { k: 'emoji', label: 'Emoji', min: 0, max: EMOJIS.length, step: 1, list: true, emoji: true,
@@ -188,7 +189,7 @@ import * as ort from './vendor/ort.wasm.bundle.min.mjs';
     ],
   };
   const STYLES = OPTS.rendu.map(o => o.k);
-  const DEFAULTS = { style: 'couleur', couleur: MULTI, bruit: 1, emoji: EMOJIS.length, lumiere: 0.5, neon: MULTI, sens: 0.7, nb: 0, marge: 0.3, boxes: 0, seed: 0, sel: {} };
+  const DEFAULTS = { style: 'couleur', couleur: MULTI, carre: MULTI, bruit: 1, emoji: EMOJIS.length, lumiere: 0.5, neon: MULTI, sens: 0.7, nb: 0, marge: 0.3, boxes: 0, seed: 0, sel: {} };
   // Settings survive photo changes and reloads until Reset (stored in this browser only).
   const load = () => { try { const s = JSON.parse(localStorage.getItem('vl-state-7') || 'null'); return s ? { ...DEFAULTS, ...s } : null; } catch { return null; } };
   const save = () => { try { localStorage.setItem('vl-state-7', JSON.stringify(state)); } catch {} };
@@ -655,6 +656,12 @@ import * as ort from './vendor/ort.wasm.bundle.min.mjs';
       glow(ctx, poly, s, cx, cy, dark ? '#000' : '#fff', dark ? '0,0,0' : '255,214,160', p * 1.4, 0.3 + 0.4 * p, dark);
       return;
     }
+    if (st === 'carre') {   // a square covering the whole contour, one flat colour
+      const v = +state.carre, side = s * 1.04;
+      ctx.fillStyle = v === MULTI ? randHue(rand) : swatch(v);
+      ctx.fillRect(cx - side / 2, cy - side / 2, side, side);
+      return;
+    }
     if (st === 'neon') {
       const v = +state.neon, hue = v === MULTI ? HUES[(rand() * HUES.length) | 0] : v >= 2 ? HUES[v - 2] : null;
       const core = v === 1 ? '#000' : v === 0 ? '#fff' : hsl(hue, 60), halo = v === 1 ? '0,0,0' : v === 0 ? '255,255,255' : rgbOf(hue, 60);
@@ -699,13 +706,13 @@ import * as ort from './vendor/ort.wasm.bundle.min.mjs';
     // Overlays: 1 box · 2 mask outline · 3 landmarks · 4 box + score · 5 all. Never exported.
     const B = +state.boxes;
     if (B) {
-      const r = Math.max(2, base.width / 450);
-      ctx.lineWidth = Math.max(3, base.width / 350);
-      ctx.font = `bold ${Math.max(18, base.width / 40)}px ui-monospace, monospace`; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+      const r = Math.max(1, base.width / 900);
+      ctx.lineWidth = Math.max(1.5, base.width / 700);
+      ctx.font = `${Math.max(11, base.width / 60)}px ui-monospace, monospace`; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
       for (const f of shown) {
         const bx = f.box;
         if (B === 1 || B >= 4) { ctx.strokeStyle = '#ff5a3c'; ctx.strokeRect(bx.x1, bx.y1, bx.x2 - bx.x1, bx.y2 - bx.y1); }
-        if (B >= 4) { ctx.fillStyle = '#ff5a3c'; ctx.fillText(bx.score.toFixed(2), bx.x1, bx.y1 - 4); }
+        if (B >= 4) { ctx.fillStyle = '#ff5a3c'; ctx.fillText(bx.score.toFixed(2), bx.x1, bx.y1 - 2); }
         if (B === 2 || B === 5) { ctx.strokeStyle = '#fff'; trace(ctx, f.poly); ctx.stroke(); }
         if (B === 3 || B === 5) { ctx.fillStyle = '#fff'; for (const p of f.pts) { ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill(); } }
       }

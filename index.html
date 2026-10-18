@@ -1,0 +1,795 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111111">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Notus">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);box-sizing:border-box;height:100%}body{margin:0}[hidden]{display:none!important}</style>
+<title>Notus</title>
+<style>
+/* Brut: one dark screen, no page scroll. 8 px grid, 16 px gutter, no radius, no shadow, no gradient but the hues.
+   Rows: top 48 · photo (flex) · drawer 128 (menu 48 + 8 + dial 56 + 16) · bottom 48. Four greys only. */
+:root{--bg:#111111;--panel:#1f1f1f;--fg:#f2f2f2;--muted:#c4c4c4;--accent:#f2f2f2;--on:#111111;--mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;color-scheme:dark}
+[hidden]{display:none!important}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--fg);font:14px/1.3 var(--mono);padding-left:max(0px,env(safe-area-inset-left,0px));padding-right:max(0px,env(safe-area-inset-right,0px))}
+button,.btn{font:inherit;color:inherit;background:none;border:0;border-radius:0;padding:0;margin:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
+button:disabled{opacity:.3}
+button:focus-visible,.btn:focus-within{outline:2px solid var(--fg);outline-offset:-2px}
+#file{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.screen{height:100%;display:flex;flex-direction:column}
+.cap{text-transform:uppercase;letter-spacing:.08em}
+
+.top{display:flex;align-items:stretch;height:48px;background:var(--panel);padding:0 8px}
+.top .sp{flex:1}
+.top .btn,.top button{display:flex;align-items:center;padding:0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.08em}
+.top .ico{font-size:18px;letter-spacing:0;min-width:40px;justify-content:center}
+
+.photo{flex:1;min-height:0;position:relative;display:flex;align-items:center;justify-content:center;padding:8px;touch-action:none;user-select:none;-webkit-user-select:none;overflow:hidden}
+.photo canvas{display:block;transform-origin:center;will-change:transform}
+.manual .photo{padding:0}
+.manual .drawer{display:none!important}
+.empty{display:grid;gap:16px;justify-items:center;text-align:center;padding:16px}
+.empty .pick{display:flex;align-items:center;justify-content:center;width:min(80vw,320px);height:64px;background:var(--fg);color:var(--on);font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;cursor:pointer}
+.empty p{margin:0;color:var(--muted);font-size:12px;max-width:28em}
+.err{color:var(--fg)!important;text-decoration:underline}
+.photo .tip{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);background:var(--bg);color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.08em;padding:8px 12px;pointer-events:none;white-space:nowrap;opacity:0}
+.photo .tip.on{opacity:1}
+
+/* analysis: dark screen, the word and three squares pulsing (opacity only, so it keeps moving while the detector runs) */
+#busy{position:fixed;inset:0;z-index:40;background:rgba(17,17,17,.9);display:flex;align-items:center;justify-content:center;gap:16px;font-size:14px;text-transform:uppercase;letter-spacing:.1em}
+#busy .dots{display:flex;gap:6px}
+#busy .dots i{width:8px;height:8px;background:var(--fg);animation:pulse 1s infinite}
+#busy .dots i:nth-child(2){animation-delay:.2s}
+#busy .dots i:nth-child(3){animation-delay:.4s}
+@keyframes pulse{0%,80%,100%{opacity:.15}40%{opacity:1}}
+@media (prefers-reduced-motion:reduce){#busy .dots i{animation:none;opacity:1}}
+/* option wheel: strong shade; entries slide behind the menu row, the current one on it */
+#shade{position:fixed;inset:0;background:rgba(17,17,17,.9);z-index:30;pointer-events:none}
+#wheel{position:fixed;inset:0;z-index:31;pointer-events:none;overflow:hidden}
+#wheelItems{position:absolute;left:0;right:0;top:0;transform:translateY(var(--y,0));transition:transform .12s ease-out}
+#wheelItems div{height:48px;display:flex;align-items:center;padding:0 16px 0 44px;font-size:14px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+#wheelItems div.cur{background:var(--fg);color:var(--on)}
+.picking .sl .dial,.picking .sl .menu{visibility:hidden}
+
+.drawer{height:128px;box-sizing:border-box;overflow:hidden;background:var(--panel);padding:0 16px 16px}
+#drExport{display:grid;grid-template-rows:48px 48px auto;gap:8px;padding-top:16px;align-content:start}
+#drReglages,#drRendu{touch-action:none;user-select:none;-webkit-user-select:none}
+.bottom{display:grid;grid-template-columns:repeat(3,1fr);height:48px;background:var(--panel);border-top:1px solid var(--bg);padding-bottom:env(safe-area-inset-bottom,0px);box-sizing:content-box}
+.bottom button{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.bottom button[aria-pressed="true"]{color:var(--fg);box-shadow:inset 0 2px 0 var(--fg)}
+.bottom.one{grid-template-columns:1fr}
+.bottom.one button{background:var(--fg);color:var(--on);font-weight:700;letter-spacing:.1em}
+.full .top,.full .drawer,.full .bottom{display:none!important}
+
+/* --- dial --- */
+.sl{display:grid;grid-template-rows:48px 56px;gap:8px;touch-action:none;user-select:none;-webkit-user-select:none}
+.sl .dial,.sl .go{grid-row:2}
+.sl .go{background:var(--fg);color:var(--on);font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.1em}
+.sl .menu{display:flex;align-items:center;gap:12px;margin:0 -16px;padding:0 16px;border-bottom:1px solid var(--bg);font-size:14px;text-transform:uppercase;letter-spacing:.08em;cursor:ns-resize}
+.sl .menu .chev{color:var(--muted);width:16px;letter-spacing:0}
+/* groove: dark channel across the screen, a hard mask for what scrolls inside */
+.sl .dial{position:relative;margin:0 -16px;overflow:hidden;cursor:ew-resize}
+.sl .strip{position:absolute;left:0;top:0;height:100%;will-change:transform}
+.sl .sq{position:absolute;top:14px;width:32px;height:32px;margin-left:-16px;background:var(--muted);color:var(--on);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}
+.sl .sq.em{background:none;font-size:24px;font-weight:400}
+.sl .bar{position:absolute;top:14px;height:32px;margin-left:-16px}
+.sl .pip{position:absolute;top:calc(30px - var(--pip) / 2);width:var(--pip);height:var(--pip);margin-left:calc(var(--pip) / -2);background:var(--muted)}
+.sl .pip.mid{background:var(--fg);transform:scale(1.6)}
+.sl .sel{position:absolute;left:50%;top:8px;width:44px;height:44px;margin-left:-22px;box-sizing:border-box;border:2px solid var(--fg);z-index:3;
+  display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--fg);pointer-events:none}
+.sl .dial:not(.list) .sel{background:var(--panel)}
+
+.choices{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.choices button{background:var(--bg);color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.08em}
+.choices button[aria-pressed="true"]{background:var(--fg);color:var(--on)}
+.primary{background:var(--fg);color:var(--on);font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.1em}
+.muted{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.08em;margin:0}
+</style>
+</head>
+<body>
+<div class="screen" id="editScreen">
+  <input type="file" id="file" accept="image/*">
+  <div class="top">
+    <label class="btn" for="file" id="change" hidden>Photo</label>
+    <button type="button" id="cancel" hidden>Annuler</button>
+    <span class="sp"></span>
+    <button type="button" class="ico" id="undo" title="Annuler" disabled hidden>↶</button>
+    <button type="button" class="ico" id="redo" title="Rétablir" disabled hidden>↷</button>
+    <button type="button" id="reset" title="Réinitialiser" hidden>Reset</button>
+  </div>
+
+  <div class="photo" id="photoArea">
+    <div class="empty" id="empty">
+      <label class="pick" for="file" id="pickText">Choisir une photo</label>
+      <p id="pickMsg">Chaque visage est découpé sur son contour et masqué. Tout reste sur ton appareil.</p>
+    </div>
+    <canvas id="view" hidden></canvas>
+    <div class="tip" id="tip">↕ options · ↔ régler</div>
+  </div>
+
+  <div class="drawer" id="drReglages" hidden><div class="sl" id="rSlider"></div></div>
+  <div class="drawer" id="drRendu" hidden><div class="sl" id="tSlider"></div></div>
+  <div class="drawer" id="drExport" hidden>
+    <div class="choices">
+      <button data-fmt="jpeg" aria-pressed="true">JPEG</button>
+      <button data-fmt="png" aria-pressed="false">PNG</button>
+    </div>
+    <button type="button" class="primary" id="save">Enregistrer</button>
+    <p class="muted" id="saveMsg">Sans métadonnées EXIF.</p>
+  </div>
+
+  <div id="busy" hidden><span>Analyse</span><span class="dots"><i></i><i></i><i></i></span></div>
+  <div id="shade" hidden></div>
+  <div id="wheel" hidden><div id="wheelItems"></div></div>
+  <div class="bottom one" id="manualBar" hidden><button type="button" id="validate">Valider</button></div>
+  <div class="bottom" id="bottom" hidden>
+    <button type="button" data-dr="Reglages">Réglages</button>
+    <button type="button" data-dr="Rendu">Rendu</button>
+    <button type="button" data-dr="Export">Export</button>
+  </div>
+</div>
+
+<script type="module">
+import * as ort from './vendor/ort.wasm.bundle.min.mjs';
+(() => {
+  const MAX = 1024;      // long edge, in pixels, fed to the detector on the first pass (multiple of 32)
+  const THRESH = 0.12;   // detector floor: every candidate above this is kept, the Seuil slider filters at render time
+  const $ = id => document.getElementById(id);
+  const base = document.createElement('canvas');   // the source, at most 1600 px
+  const out  = $('view');                          // the render, shown directly (no re-encoding per frame)
+  let faces = [], modelReady = null, det, lmk, fmt = 'jpeg';
+
+  // ---------- state, history ----------
+  const HUES = Array.from({ length: 32 }, (_, i) => i * 11.25);                       // 32 hues around the wheel
+  const hsl = (h, l = 55) => `hsl(${h} 85% ${l}%)`;
+  // Only solid, round heads: an emoji with holes or a thin shape would let the face show through.
+  const EMOJIS = ['😀','😃','😎','🤫','😶','🥸','🤡','👽','🤖','🎃','😷','🧐','😺','🐵','🐸','🦊','🐼','🐻','🦁','🐯',
+                  '🌝','🌞','😈','🥶','😡','🤓','😴','🥳','🐶','🐷','🐨','🐮'];
+  // A colour scale shared by several sliders: 0 = white, 1 = black, 2…33 = the 32 hues, 34 = multi (always last).
+  const MULTI = 34, RAINBOW = 'linear-gradient(90deg,#f33,#fc0,#3c3,#09f,#90f)';
+  const swatch = v => v === 0 ? '#fff' : v === 1 ? '#000' : hsl(HUES[v - 2]);     // v < MULTI
+  const scale = (k, label) => ({ k, label, min: 0, max: MULTI, step: 1, list: true, num: v => String(v + 1),
+    desc: v => v === MULTI ? 'Multicolore' : v === 0 ? 'Blanc' : v === 1 ? 'Noir' : `Teinte ${v - 1}`, hues: [2, MULTI - 1],
+    chip: v => v === MULTI ? RAINBOW : swatch(v) });
+  const OVERLAYS = ['Aucun', 'Cadre', 'Contour', 'Points', 'Cadre + score', 'Tout'];   // debug overlays drawn on the masked faces
+  // Every setting is one dial. Réglages is a list of them; Rendu is a list of styles, each one dial. Vertical drag moves through the list.
+  // num: what the dial centre shows. desc: the full meaning, shown on the dial only while it is being adjusted.
+  const OPTS = {
+    reglages: [
+      // Seuil: right = more faces (lower detector threshold); fully right takes every candidate.
+      // Seuil counts faces: one notch per candidate, in order of detector confidence (most obvious first).
+      { k: 'nb', label: 'Seuil', min: 0, get max() { return Math.max(1, faces.length); }, step: 1, num: v => String(v) },
+      // Marge 0…1 → contour × (0.7 + marge): 0.3 is the bare contour.
+      { k: 'marge', label: 'Marge', min: 0, max: 1, step: 0.1, num: v => v.toFixed(1) },
+      { k: 'boxes', label: 'Affichage', min: 0, max: 5, step: 1, list: true, num: v => String(v), desc: v => OVERLAYS[v] },
+      // Manuel: a button instead of a dial; the photo goes full screen and tapping a face toggles its mask.
+      { k: 'manual', label: 'Manuel', button: 'Sélection' },
+    ],
+    rendu: [
+      scale('couleur', 'Couleur'),
+      // Bruit: left half = photo tint, right half = random colours; the outer notch of each half is the big grain.
+      { k: 'bruit', label: 'Bruit', min: 0, max: 3, step: 1, list: true, num: v => String(v + 1), desc: v => ['Photo · gros', 'Photo · fin', 'Couleurs · fin', 'Couleurs · gros'][v] },
+      { k: 'emoji', label: 'Emoji', min: 0, max: EMOJIS.length, step: 1, list: true, emoji: true,
+        num: v => v === EMOJIS.length ? '?' : EMOJIS[v], desc: v => v === EMOJIS.length ? 'Aléatoire' : `n° ${v + 1}` },
+      { k: 'lumiere', label: 'Lumière', min: -1, max: 1, step: 0.05, mid: 0,
+        num: v => (v > 0 ? '+' : '') + Math.round(v * 100), desc: v => v > 0 ? 'Lumière' : v < 0 ? 'Ténèbres' : 'Neutre' },
+      scale('neon', 'Néon'),
+    ],
+  };
+  const STYLES = OPTS.rendu.map(o => o.k);
+  const DEFAULTS = { style: 'couleur', couleur: MULTI, bruit: 1, emoji: EMOJIS.length, lumiere: 0.5, neon: MULTI, sens: 0.7, nb: 0, marge: 0.3, boxes: 0, seed: 0, sel: {} };
+  // Settings survive photo changes and reloads until Reset (stored in this browser only).
+  const load = () => { try { const s = JSON.parse(localStorage.getItem('vl-state-7') || 'null'); return s ? { ...DEFAULTS, ...s } : null; } catch { return null; } };
+  const save = () => { try { localStorage.setItem('vl-state-7', JSON.stringify(state)); } catch {} };
+  let state = load() || { ...DEFAULTS, seed: (Math.random() * 100) | 0 }, drawer = null, hist = [], hi = -1;
+  const cur = { reglages: 0 };   // selected Réglages option (not part of history); the Rendu option is state.style
+
+  // Small seeded PRNG so a given seed always gives the same colours/emojis/noise.
+  function prng(seed) { let a = (seed * 7919 + 1) >>> 0; return () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+
+  function commit() { hist = hist.slice(0, hi + 1); hist.push({ ...state }); hi = hist.length - 1; save(); sync(); }
+  function restore(s) { state = { ...s }; save(); sync(); render(); }
+  const context = () => drawer === 'Reglages' ? 'reglages' : drawer === 'Rendu' ? 'rendu' : null;
+  const thr = () => 1 - state.sens;
+  // Seuil is stored as a score threshold (so it carries over to the next photo) and shown as a face count.
+  const countFromSens = () => faces.filter(f => f.box.score >= thr()).length;
+  function sensFromCount(k) {   // threshold halfway between the k-th and (k+1)-th most confident faces
+    const s = i => faces[i].box.score;
+    const t = !faces.length ? thr() : k <= 0 ? s(0) + 0.005 : k >= faces.length ? s(faces.length - 1) - 0.005 : (s(k - 1) + s(k)) / 2;
+    state.sens = +(1 - t).toFixed(5);
+  }
+  let pending = 0;                    // at most one render per animation frame
+  const schedule = () => { if (!pending) pending = requestAnimationFrame(() => { pending = 0; render(); }); };   // detector score a face needs to be masked
+  let full = false, manual = false;   // photo-only view · manual face selection
+  // A face is masked when the seuil includes it, unless the manual selection says otherwise.
+  const isShown = i => state.sel[i] !== undefined ? state.sel[i] : i < state.nb;
+  const idx = c => c === 'rendu' ? STYLES.indexOf(state.style) : cur[c];
+  const option = () => { const c = context(); return c ? OPTS[c][idx(c)] : null; };
+  const ticksOf = o => { const n = Math.round((o.max - o.min) / o.step); return n <= 200 ? n : 40; };   // one tick per entry, 40 when continuous
+  function setValue(o, v) { v = Math.min(o.max, Math.max(o.min, Math.round(v / o.step) * o.step)); state[o.k] = +v.toFixed(4); if (o.k === 'nb') sensFromCount(state.nb); }
+
+  // Haptics: a real tick on each notch — vibrate() where it exists (Android), the iOS switch-toggle trick otherwise.
+  // iOS has no vibration API: clicking the label of a native switch makes Safari (18+) play its system tick.
+  const hap = (() => {
+    let last = 0;
+    const label = document.createElement('label'), sw = document.createElement('input');
+    sw.type = 'checkbox'; sw.setAttribute('switch', ''); label.append(sw); label.style.display = 'none'; label.ariaHidden = 'true';
+    document.head.append(label);
+    return () => {
+      const t = performance.now(); if (t - last < 35) return; last = t;
+      if (navigator.vibrate) navigator.vibrate(6); else label.click();
+    };
+  })();
+  const notch = (o, v) => Math.round((v - o.min) / (o.max - o.min) * ticksOf(o));
+
+  // Dial block: first row is the option menu (press it, or drag vertically anywhere, to scroll the options).
+  // Below it a dark groove across the screen; the dial slides inside it under a fixed square selector.
+  //  · list options: the entries themselves, as squares (colour, number or emoji); the hues form one continuous bar.
+  //  · continuous options: one small square per increment, the middle one larger; the value is written in the selector.
+  // Weight: the dial eases toward the finger and settles on a notch; a flick keeps it spinning against friction.
+  function makeSlider(root) {
+    root.innerHTML = '<div class="menu"><span class="chev">⇅</span><span class="name"></span></div><div class="dial"><div class="strip"></div><div class="sel"></div></div><button type="button" class="go" hidden></button>';
+    const q = s => root.querySelector(s), name = q('.name'), dial = q('.dial'), strip = q('.strip'), sel = q('.sel'), go = q('.go');
+    go.addEventListener('click', () => o && o.button && enterManual());
+    let o = null, n = 1, sp = 16, built = '', pos = 0, target = 0, raf = 0, held = false;
+    const at = j => +(o.min + j / n * (o.max - o.min)).toFixed(4);
+    const unit = () => (o.max - o.min) / n;
+    function build() {
+      const key = o.k + '/' + dial.clientWidth + '/' + o.max;
+      if (key === built) return false; built = key;
+      n = ticksOf(o);
+      // Few entries → big squares far apart; many → small squares packed tight.
+      sp = o.list ? 48 : Math.max(12, Math.min(48, dial.clientWidth * 0.7 / n));
+      strip.style.setProperty('--pip', Math.round(Math.max(4, Math.min(20, sp * 0.4))) + 'px');
+      strip.textContent = ''; dial.classList.toggle('list', !!o.list);
+      const add = (cls, j) => { const d = document.createElement('div'); d.className = cls; d.style.left = (j * sp) + 'px'; strip.append(d); return d; };
+      if (o.hues) {   // the hue range is one bar with a continuous gradient; each hue still has its own notch
+        const [a, b] = o.hues, w = (b - a) * sp, bar = add('bar', a);
+        bar.style.width = (w + 32) + 'px';
+        bar.style.background = `linear-gradient(90deg, ${Array.from({ length: b - a + 1 }, (_, k) => `${hsl(HUES[k])} ${((16 + k * sp) / (w + 32) * 100).toFixed(2)}%`).join(', ')})`;
+      }
+      for (let j = 0; j <= n; j++) {
+        if (o.hues && j >= o.hues[0] && j <= o.hues[1]) continue;
+        if (o.list) {
+          const v = at(j), d = add('sq', j);
+          if (o.chip) { d.classList.add('sw'); d.style.background = o.chip(v); }
+          else if (o.emoji) { d.classList.add('em'); d.textContent = o.num(v); }
+          else d.textContent = o.num(v);
+        } else add(o.mid !== undefined && Math.abs(at(j) - o.mid) < 1e-6 ? 'pip mid' : 'pip', j);
+      }
+      return true;
+    }
+    const paint = () => { strip.style.transform = `translate3d(${dial.clientWidth / 2 - (pos - o.min) / unit() * sp}px,0,0)`; };
+    function animate() {   // ease the shown position toward the target: the dial has weight but never lags far
+      if (raf) return;
+      const tick = () => {
+        pos += (target - pos) * (held ? 0.45 : 0.28);
+        if (Math.abs(target - pos) < unit() * 0.004) pos = target;
+        paint();
+        raf = pos === target ? 0 : requestAnimationFrame(tick);
+      };
+      raf = requestAnimationFrame(tick);
+    }
+    function draw() {
+      if (!o) return;
+      name.textContent = o.label;
+      if (o.button) { dial.hidden = true; go.hidden = false; go.textContent = o.button; return; }
+      dial.hidden = false; go.hidden = true;
+      const fresh = build(), v = +state[o.k];
+      sel.textContent = o.list ? '' : o.num(v);
+      if (!held) target = v;
+      if (fresh) { pos = target; paint(); } else animate();
+    }
+    function place(p) {   // p: unrounded position in value units; the state takes the rounded step
+      target = Math.min(o.max, Math.max(o.min, p)); animate();
+      const v0 = +state[o.k]; setValue(o, p);
+      if (+state[o.k] !== v0) { hap(); activity(); sync(); schedule(); }
+    }
+    let drag = null, spin = 0;
+    dial.addEventListener('pointerdown', e => {
+      if (!o) return; e.preventDefault(); dial.setPointerCapture(e.pointerId); cancelAnimationFrame(spin); spin = 0;
+      held = true;
+      drag = { id: e.pointerId, x: e.clientX, p0: target, start: +state[o.k], lx: e.clientX, lt: e.timeStamp, vel: 0 };
+    });
+    dial.addEventListener('pointermove', e => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const dt = Math.max(1, e.timeStamp - drag.lt);
+      drag.vel = 0.6 * ((e.clientX - drag.lx) / dt) + 0.4 * drag.vel; drag.lx = e.clientX; drag.lt = e.timeStamp;   // px per ms, smoothed
+      place(drag.p0 - (e.clientX - drag.x) / sp * unit());
+    });
+    const up = e => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const start = drag.start, recent = e.timeStamp - drag.lt < 70;
+      let vel = recent ? -drag.vel / sp * unit() : 0, p = target, last = performance.now();   // value units per ms
+      drag = null;
+      const settle = () => { spin = 0; held = false; target = +state[o.k]; animate(); if (+state[o.k] !== start) commit(); };
+      if (Math.abs(vel) / unit() * sp < 0.35) return settle();
+      const step = now => {
+        const dt = Math.min(40, now - last); last = now;
+        p += vel * dt; vel *= Math.pow(0.995, dt);   // friction: heavy, but a good flick still crosses the whole dial
+        if (p <= o.min || p >= o.max) vel = 0;
+        place(p);
+        if (Math.abs(vel) / unit() * sp < 0.03) return settle();
+        spin = requestAnimationFrame(step);
+      };
+      spin = requestAnimationFrame(step);
+    };
+    dial.addEventListener('pointerup', up); dial.addEventListener('pointercancel', up);
+    return { set(opt) { if (opt !== o) { o = opt; built = ''; } draw(); }, draw, menu: q('.menu'), adjust() {} };
+  }
+  const sliders = { r: null, t: null };
+
+  function sync() {              // state → widgets
+    $('undo').disabled = hi <= 0; $('redo').disabled = hi >= hist.length - 1;
+    const c = context(); if (!c) return;
+    sliders[c === 'reglages' ? 'r' : 't'].set(OPTS[c][idx(c)]);
+  }
+  function openDrawer(name) {    // a drawer is always open; only the full-photo view hides it
+    drawer = name;
+    for (const n of ['Reglages', 'Rendu', 'Export']) $('dr' + n).hidden = drawer !== n;
+    for (const b of document.querySelectorAll('.bottom button')) b.setAttribute('aria-pressed', b.dataset.dr === drawer);
+    sync(); activity();
+  }
+
+  // Tip on the photo after 10 s without touching anything, only while a slider context is open.
+  let idle = null;
+  function activity() {
+    $('tip').classList.remove('on'); clearTimeout(idle);
+    if (context() && !full) idle = setTimeout(() => $('tip').classList.add('on'), 10000);
+  }
+
+  // Option wheel: the screen darkens, the entries line up on the menu row and slide behind it with the finger.
+  const ROW = 48;
+  function showWheel(c, i) {
+    const wh = $('wheel'), items = $('wheelItems'), menu = sliders[c === 'reglages' ? 'r' : 't'].menu, r = menu.getBoundingClientRect();
+    if (wh.dataset.c !== c) {
+      items.textContent = ''; wh.dataset.c = c;
+      for (const o of OPTS[c]) { const d = document.createElement('div'); d.textContent = o.label; items.append(d); }
+    }
+    [...items.children].forEach((d, j) => { d.className = j === i ? 'cur' : ''; });
+    wh.style.setProperty('--y', (r.top + (r.height - ROW) / 2 - i * ROW) + 'px');
+    $('shade').hidden = false; wh.hidden = false; $('editScreen').classList.add('picking');
+  }
+  const hideWheel = () => { $('shade').hidden = true; $('wheel').hidden = true; $('editScreen').classList.remove('picking'); };
+  // Long press on the photo: show the original while the finger stays down.
+  function peek(on) { if (!base.width) return; if (on) { out.getContext('2d').drawImage(base, 0, 0); } else render(); }
+  function toggleFull() { full = !full; $('editScreen').classList.toggle('full', full); hideWheel(); resetZoom(); if (!full) sync(); activity(); }
+
+  // ---------- manual selection ----------
+  let selBefore = null;
+  function enterManual() {
+    manual = true; selBefore = { ...state.sel }; hideWheel(); resetZoom();
+    $('editScreen').classList.add('manual');
+    for (const id of ['change', 'undo', 'redo', 'reset', 'bottom']) $(id).hidden = true;
+    for (const id of ['cancel', 'manualBar']) $(id).hidden = false;
+  }
+  function exitManual(ok) {
+    if (!ok) state.sel = selBefore;
+    manual = false; resetZoom();
+    $('editScreen').classList.remove('manual');
+    for (const id of ['cancel', 'manualBar']) $(id).hidden = true;
+    for (const id of ['change', 'undo', 'redo', 'reset', 'bottom']) $(id).hidden = false;
+    if (ok) commit(); sync(); render();
+  }
+  // Which detected face is under a screen point: the smallest box containing it, with a little slack.
+  function faceAt(cx, cy) {
+    const r = out.getBoundingClientRect(), x = (cx - r.left) / r.width * out.width, y = (cy - r.top) / r.height * out.height;
+    let best = -1, bestA = Infinity;
+    faces.forEach((f, i) => {
+      const b = f.box, pad = (b.x2 - b.x1) * 0.3;
+      if (x < b.x1 - pad || x > b.x2 + pad || y < b.y1 - pad || y > b.y2 + pad) return;
+      const a = (b.x2 - b.x1) * (b.y2 - b.y1); if (a < bestA) { bestA = a; best = i; }
+    });
+    return best;
+  }
+  function toggleFace(cx, cy) {
+    const i = faceAt(cx, cy); if (i < 0) return;
+    state.sel = { ...state.sel, [i]: !isShown(i) }; hap(); render();
+  }
+
+  // ---------- zoom (full and manual views): pinch to zoom, drag to pan, tap = leave full view / toggle a face ----------
+  const zoom = { z: 1, tx: 0, ty: 0 };
+  const applyZoom = () => { out.style.transform = zoom.z === 1 ? '' : `translate(${zoom.tx}px,${zoom.ty}px) scale(${zoom.z})`; };
+  function resetZoom() { zoom.z = 1; zoom.tx = zoom.ty = 0; applyZoom(); }
+  function clampPan() {   // keep the photo over the screen
+    const mx = (zoom.z - 1) * out.clientWidth / 2, my = (zoom.z - 1) * out.clientHeight / 2;
+    zoom.tx = Math.min(mx, Math.max(-mx, zoom.tx)); zoom.ty = Math.min(my, Math.max(-my, zoom.ty));
+  }
+  function zoomGestures(area) {
+    const pts = new Map(); let pinch = null, pan = null, moved = false, hold = 0, peeking = false;
+    const mid = () => { const [a, b] = [...pts.values()]; return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, d: Math.hypot(a.x - b.x, a.y - b.y) }; };
+    const centre = () => { const r = area.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; };
+    area.addEventListener('pointerdown', e => {
+      if (!(full || manual) || !base.width) return;
+      e.preventDefault(); try { area.setPointerCapture(e.pointerId); } catch {}
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pts.size === 2) {   // pinch: remember the photo point under the fingers' midpoint
+        const m = mid(), c = centre();
+        pinch = { d0: m.d, z0: zoom.z, px: (m.x - c.x - zoom.tx) / zoom.z, py: (m.y - c.y - zoom.ty) / zoom.z }; pan = null; moved = true;
+      } else if (pts.size === 1) {
+        pan = { x: e.clientX, y: e.clientY, tx: zoom.tx, ty: zoom.ty }; moved = false;
+        clearTimeout(hold); hold = setTimeout(() => { if (pan && !moved && pts.size === 1) { peeking = true; peek(true); } }, 350);
+      }
+    });
+    area.addEventListener('pointermove', e => {
+      if (!pts.has(e.pointerId)) return;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pinch && pts.size === 2) {
+        const m = mid(), c = centre();
+        zoom.z = Math.min(6, Math.max(1, pinch.z0 * m.d / pinch.d0));
+        zoom.tx = m.x - c.x - pinch.px * zoom.z; zoom.ty = m.y - c.y - pinch.py * zoom.z;
+        clampPan(); applyZoom();
+      } else if (pan && pts.size === 1) {
+        const dx = e.clientX - pan.x, dy = e.clientY - pan.y;
+        if (!moved && Math.hypot(dx, dy) < 8) return;
+        if (peeking) return;
+        moved = true; clearTimeout(hold);
+        if (zoom.z > 1) { zoom.tx = pan.tx + dx; zoom.ty = pan.ty + dy; clampPan(); applyZoom(); }
+      }
+    });
+    const up = e => {
+      if (!pts.has(e.pointerId)) return;
+      const tap = !moved && !peeking && pts.size === 1 && e.type === 'pointerup';
+      clearTimeout(hold); if (peeking && pts.size === 1) { peeking = false; peek(false); }
+      pts.delete(e.pointerId);
+      if (pts.size === 1) { pinch = null; const [p] = [...pts.values()]; pan = { x: p.x, y: p.y, tx: zoom.tx, ty: zoom.ty }; }
+      if (pts.size === 0) pinch = pan = null;
+      if (tap) { if (manual) toggleFace(e.clientX, e.clientY); else toggleFull(); }
+    };
+    area.addEventListener('pointerup', up); area.addEventListener('pointercancel', up);
+  }
+
+  // Gestures. Menu row: press shows the wheel, vertical drag picks. Photo and drawer: vertical drag shows the wheel too,
+  // horizontal drag sets the current option, a tap on the photo toggles the full-photo view.
+  function gestures() {
+    let g = null;
+    const begin = (e, where) => {
+      if (!base.width || full || manual) return;          // full and manual views have their own (zoom) gestures
+      if (e.button !== 0 && e.pointerType === 'mouse') return;
+      if (e.target.closest('.dial, button')) return;
+      e.preventDefault(); activity();
+      const c = context();
+      g = { x: e.clientX, y: e.clientY, axis: null, c, where, id: e.pointerId, w: e.currentTarget.clientWidth };
+      if (c) {
+        const o = OPTS[c][idx(c)];
+        Object.assign(g, { o, i0: idx(c) });
+        if (!o.button) Object.assign(g, { v0: +state[o.k], n: notch(o, +state[o.k]) });
+        if (e.target.closest('.menu')) { g.axis = 'y'; showWheel(c, idx(c)); }
+      }
+      if (where === 'photo') g.hold = setTimeout(() => { if (g && !g.axis) { g.peek = true; peek(true); } }, 350);
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
+    };
+    const move = e => {
+      if (!g || e.pointerId !== g.id || !g.c) return;
+      const dx = e.clientX - g.x;
+      if (!g.axis) {
+        const dy0 = e.clientY - g.y;
+        if (Math.abs(dx) < 6 && Math.abs(dy0) < 6) return;
+        if (g.peek) return;                               // showing the original: no adjusting until release
+        clearTimeout(g.hold);
+        g.axis = Math.abs(dy0) >= Math.abs(dx) ? 'y' : 'x';
+        if (g.axis === 'y') { g.y = e.clientY; showWheel(g.c, idx(g.c)); return; }
+      }
+      if (g.axis === 'x') {
+        if (g.o.button) return;
+        if (!g.adj) { g.adj = sliders[g.c === 'reglages' ? 'r' : 't']; g.adj.adjust(true); }
+        setValue(g.o, g.v0 + dx / g.w * 1.1 * (g.o.max - g.o.min));
+        const n = notch(g.o, +state[g.o.k]); if (n !== g.n) { g.n = n; hap(); sync(); schedule(); }
+      } else {
+        // The list follows the finger: dragging down brings the previous entry under the menu row.
+        const dy = e.clientY - g.y, list = OPTS[g.c], i = Math.min(list.length - 1, Math.max(0, g.i0 - Math.round(dy / ROW)));
+        if (i !== idx(g.c)) { if (g.c === 'rendu') state.style = STYLES[i]; else cur[g.c] = i; hap(); g.moved = true; sync(); showWheel(g.c, i); if (g.c === 'rendu') schedule(); }
+      }
+    };
+    const end = e => {
+      if (!g || e.pointerId !== g.id) return;
+      hideWheel(); activity(); if (g.adj) g.adj.adjust(false); clearTimeout(g.hold);
+      if (g.peek) peek(false);
+      else if (!g.axis && g.where === 'photo' && e.type === 'pointerup') toggleFull();
+      else if ((g.axis === 'x' && g.o && !g.o.button && state[g.o.k] !== g.v0) || (g.moved && g.c === 'rendu')) commit();
+      g = null;
+    };
+    for (const [el, where] of [[$('photoArea'), 'photo'], [$('drReglages'), 'drawer'], [$('drRendu'), 'drawer']]) {
+      el.addEventListener('pointerdown', e => begin(e, where));
+      el.addEventListener('pointermove', move); el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+    }
+  }
+
+  function buildPanels() {
+    zoomGestures($('photoArea'));
+    $('cancel').addEventListener('click', () => exitManual(false));
+    $('validate').addEventListener('click', () => exitManual(true));
+    sliders.r = makeSlider($('rSlider')); sliders.t = makeSlider($('tSlider'));
+    window.addEventListener('resize', () => { sliders.r.draw(); sliders.t.draw(); });
+    gestures();
+  }
+
+  // ---------- models ----------
+  ort.env.wasm.wasmPaths = { mjs: new URL('vendor/ort-wasm-simd-threaded.mjs', document.baseURI).href, wasm: new URL('vendor/ort-wasm-simd-threaded.wasm', document.baseURI).href };
+  ort.env.wasm.numThreads = 1;
+
+  function loadModel() {
+    return modelReady ||= (async () => {
+      [det, lmk] = await Promise.all([
+        ort.InferenceSession.create('models/det_2.5g.onnx'),
+        ort.InferenceSession.create('models/2d106det.onnx'),
+      ]);
+      await det.run({ 'input.1': new ort.Tensor('float32', new Float32Array(3 * 64 * 64), [1, 3, 64, 64]) }); // warm up
+    })();
+  }
+
+  // Canvas → float32 CHW RGB tensor, (x - mean) / std.
+  function toTensor(c, mean, std) {
+    const { width: w, height: h } = c;
+    const px = c.getContext('2d').getImageData(0, 0, w, h).data;
+    const n = w * h, d = new Float32Array(3 * n);
+    for (let i = 0; i < n; i++) {
+      d[i] = (px[i * 4] - mean) / std; d[n + i] = (px[i * 4 + 1] - mean) / std; d[2 * n + i] = (px[i * 4 + 2] - mean) / std;
+    }
+    return new ort.Tensor('float32', d, [1, 3, h, w]);
+  }
+
+  // SCRFD: three strides, two anchors per cell, box = distances from the cell centre.
+  async function detectFaces(src, max, thresh) {
+    const s = Math.min(1, max / Math.max(src.width, src.height));
+    const c = document.createElement('canvas');
+    c.width = Math.max(32, Math.floor(src.width * s / 32) * 32);
+    c.height = Math.max(32, Math.floor(src.height * s / 32) * 32);
+    c.getContext('2d').drawImage(src, 0, 0, c.width, c.height);
+    const sx = src.width / c.width, sy = src.height / c.height;
+    const o = await det.run({ 'input.1': toTensor(c, 127.5, 128) });
+    const names = det.outputNames, boxes = [];
+    [8, 16, 32].forEach((stride, k) => {
+      const sc = o[names[k]].data, bb = o[names[k + 3]].data, gw = c.width / stride;
+      for (let i = 0; i < sc.length; i++) {
+        if (sc[i] < thresh) continue;
+        const cell = i >> 1, cx = (cell % gw) * stride, cy = Math.floor(cell / gw) * stride;
+        boxes.push({ score: sc[i], x1: (cx - bb[i * 4] * stride) * sx, y1: (cy - bb[i * 4 + 1] * stride) * sy,
+                     x2: (cx + bb[i * 4 + 2] * stride) * sx, y2: (cy + bb[i * 4 + 3] * stride) * sy });
+      }
+    });
+    return nms(boxes, 0.4);
+  }
+  function nms(boxes, thr) {
+    boxes.sort((a, b) => b.score - a.score);
+    const keep = [];
+    for (const b of boxes) if (keep.every(k => iou(k, b) < thr)) keep.push(b);
+    return keep;
+  }
+  function iou(a, b) {
+    const w = Math.max(0, Math.min(a.x2, b.x2) - Math.max(a.x1, b.x1)), h = Math.max(0, Math.min(a.y2, b.y2) - Math.max(a.y1, b.y1));
+    const i = w * h;
+    return i / ((a.x2 - a.x1) * (a.y2 - a.y1) + (b.x2 - b.x1) * (b.y2 - b.y1) - i);
+  }
+
+  // 106 landmarks: crop a square 1.5× the box, 192 px, output in [-1, 1] mapped back to source pixels.
+  async function landmarks(src, b) {
+    const cx = (b.x1 + b.x2) / 2, cy = (b.y1 + b.y2) / 2, size = Math.max(b.x2 - b.x1, b.y2 - b.y1) * 1.5;
+    const c = document.createElement('canvas'); c.width = c.height = 192;
+    c.getContext('2d').drawImage(src, cx - size / 2, cy - size / 2, size, size, 0, 0, 192, 192);
+    const o = await lmk.run({ data: toTensor(c, 0, 1) });
+    const d = o.fc1.data, pts = [];
+    for (let i = 0; i < 106; i++) pts.push({ x: cx + d[i * 2] * size / 2, y: cy + d[i * 2 + 1] * size / 2 });
+    return pts;
+  }
+
+  // ---------- geometry ----------
+  // Convex hull (monotone chain) of the points plus a raised copy of the upper half, which gives the forehead.
+  function contour(pts, m) {
+    const ys = pts.map(p => p.y), top = Math.min(...ys), bottom = Math.max(...ys), mid = (top + bottom) / 2;
+    const lift = (bottom - top) * 0.45;
+    const all = pts.concat(pts.filter(p => p.y < mid).map(p => ({ x: p.x, y: p.y - lift })));
+    all.sort((a, b) => a.x - b.x || a.y - b.y);
+    const cross = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+    const lower = [], upper = [];
+    for (const p of all) { while (lower.length >= 2 && cross(lower.at(-2), lower.at(-1), p) <= 0) lower.pop(); lower.push(p); }
+    for (const p of all.reverse()) { while (upper.length >= 2 && cross(upper.at(-2), upper.at(-1), p) <= 0) upper.pop(); upper.push(p); }
+    const hull = lower.slice(0, -1).concat(upper.slice(0, -1));
+    const c = hull.reduce((a, p) => ({ x: a.x + p.x / hull.length, y: a.y + p.y / hull.length }), { x: 0, y: 0 });
+    return hull.map(p => ({ x: c.x + (p.x - c.x) * m, y: c.y + (p.y - c.y) * m }));
+  }
+  // Smooth closed path through the points (quadratic curves through midpoints).
+  function trace(ctx, poly) {
+    const n = poly.length, mid = i => ({ x: (poly[i].x + poly[(i + 1) % n].x) / 2, y: (poly[i].y + poly[(i + 1) % n].y) / 2 });
+    ctx.beginPath();
+    const m0 = mid(n - 1); ctx.moveTo(m0.x, m0.y);
+    for (let i = 0; i < n; i++) { const m = mid(i); ctx.quadraticCurveTo(poly[i].x, poly[i].y, m.x, m.y); }
+    ctx.closePath();
+  }
+  const bounds = poly => { const xs = poly.map(p => p.x), ys = poly.map(p => p.y); const x = Math.min(...xs), y = Math.min(...ys); return { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y }; };
+
+  // ---------- painting ----------
+  // Average colour of the source under a box — the only thing the noise modes keep from the original.
+  function meanColor(b) {
+    const x = Math.max(0, b.x | 0), y = Math.max(0, b.y | 0), w = Math.min(base.width - x, Math.ceil(b.w)), h = Math.min(base.height - y, Math.ceil(b.h));
+    if (w < 1 || h < 1) return [128, 128, 128];
+    const d = base.getContext('2d', { willReadFrequently: true }).getImageData(x, y, w, h).data, n = w * h, c = [0, 0, 0];
+    for (let i = 0; i < d.length; i += 4) { c[0] += d[i]; c[1] += d[i + 1]; c[2] += d[i + 2]; }
+    return c.map(v => v / n);
+  }
+  // Random blocks; block size = face size / grain. Colours never come from the pixels they cover.
+  function noise(ctx, b, grain, pick) {
+    const px = Math.max(2, Math.max(b.w, b.h) / grain);
+    for (let y = b.y; y < b.y + b.h; y += px) for (let x = b.x; x < b.x + b.w; x += px) { ctx.fillStyle = pick(); ctx.fillRect(x, y, px + 0.5, px + 0.5); }
+  }
+  const randHue = rand => hsl(HUES[(rand() * HUES.length) | 0]);
+
+  // Light or darkness bleeding from the face: halo (additive or multiply), then an opaque core with a soft rim.
+  function glow(ctx, poly, s, cx, cy, core, haloRgb, I, S, dark) {
+    ctx.globalCompositeOperation = dark ? 'multiply' : 'lighter';
+    for (const [r, a] of [[0.55 + 1.6 * S, 0.45 * I], [0.5 + 0.6 * S, 0.9 * I]]) {
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, s * r);
+      g.addColorStop(0, `rgba(${haloRgb},${a})`); g.addColorStop(0.5, `rgba(${haloRgb},${a * 0.3})`); g.addColorStop(1, `rgba(${haloRgb},0)`);
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, s * r, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.shadowColor = core; ctx.shadowBlur = s * (0.05 + 0.2 * S); ctx.fillStyle = core;
+    trace(ctx, poly); ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+  // hsl(h 85% 55%) → "r,g,b" for rgba() halos
+  const rgbCache = new Map();
+  function rgbOf(h, l = 55) { const key = h + '/' + l; if (!rgbCache.has(key)) rgbCache.set(key, rgbOfRaw(h, l)); return rgbCache.get(key); }
+  function rgbOfRaw(h, l) { const c = document.createElement('canvas').getContext('2d'); c.fillStyle = hsl(h, l); const x = c.fillStyle; return `${parseInt(x.slice(1, 3), 16)},${parseInt(x.slice(3, 5), 16)},${parseInt(x.slice(5, 7), 16)}`; }
+
+  function paintFace(ctx, poly, rand) {
+    const b = bounds(poly), s = Math.max(b.w, b.h), cx = b.x + b.w / 2, cy = b.y + b.h / 2, st = state.style;
+
+    if (st === 'lumiere') {
+      const v = +state.lumiere, p = Math.abs(v), dark = v < 0;          // |v|: 0.5 = normal, 1 = strong
+      glow(ctx, poly, s, cx, cy, dark ? '#000' : '#fff', dark ? '0,0,0' : '255,214,160', p * 1.4, 0.3 + 0.4 * p, dark);
+      return;
+    }
+    if (st === 'neon') {
+      const v = +state.neon, hue = v === MULTI ? HUES[(rand() * HUES.length) | 0] : v >= 2 ? HUES[v - 2] : null;
+      const core = v === 1 ? '#000' : v === 0 ? '#fff' : hsl(hue, 60), halo = v === 1 ? '0,0,0' : v === 0 ? '255,255,255' : rgbOf(hue, 60);
+      glow(ctx, poly, s, cx, cy, core, halo, 1, 0.6, v === 1);
+      return;
+    }
+
+    ctx.save(); trace(ctx, poly); ctx.clip();
+    if (st === 'bruit') {
+      const v = +state.bruit, grain = v === 0 || v === 3 ? 6 : 14;
+      if (v < 2) { const c = poly.mean; noise(ctx, b, grain, () => `rgb(${c.map(x => Math.min(255, x * (0.55 + 0.9 * rand())) | 0).join(',')})`); }
+      else noise(ctx, b, grain, () => randHue(rand));
+    } else if (st === 'emoji') {
+      // nothing under the emoji: the glyph alone is sized to cover the whole contour
+    } else {
+      const v = +state.couleur; ctx.fillStyle = v === MULTI ? randHue(rand) : swatch(v); ctx.fill();
+    }
+    ctx.restore();
+    if (st === 'emoji') {
+      const v = +state.emoji, ch = v === EMOJIS.length ? EMOJIS[(rand() * EMOJIS.length) | 0] : EMOJIS[v];
+      ctx.font = `${s * 1.4}px system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(ch, cx, cy);
+    }
+  }
+
+  // Contour and mean colour are cached per face; they only change with Marge.
+  function shape(f, m) {
+    if (f.m !== m) { f.m = m; f.poly = contour(f.pts, m); f.poly.mean = meanColor(bounds(f.poly)); }
+    return f.poly;
+  }
+  function render() {
+    if (!base.width) return;
+    if (out.width !== base.width || out.height !== base.height) { out.width = base.width; out.height = base.height; fit(); }
+    const m = 0.7 + +state.marge;
+    const ctx = out.getContext('2d');
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.drawImage(base, 0, 0);
+    const shown = faces.filter((f, i) => isShown(i));   // faces are sorted by confidence
+    // One random stream per face (seed + index): toggling a face never reshuffles the others.
+    faces.forEach((f, i) => { if (isShown(i)) paintFace(ctx, shape(f, m), prng(state.seed * 1000 + i)); });
+    // Overlays: 1 box · 2 mask outline · 3 landmarks · 4 box + score · 5 all. Never exported.
+    const B = +state.boxes;
+    if (B) {
+      const r = Math.max(2, base.width / 450);
+      ctx.lineWidth = Math.max(3, base.width / 350);
+      ctx.font = `bold ${Math.max(18, base.width / 40)}px ui-monospace, monospace`; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+      for (const f of shown) {
+        const bx = f.box;
+        if (B === 1 || B >= 4) { ctx.strokeStyle = '#ff5a3c'; ctx.strokeRect(bx.x1, bx.y1, bx.x2 - bx.x1, bx.y2 - bx.y1); }
+        if (B >= 4) { ctx.fillStyle = '#ff5a3c'; ctx.fillText(bx.score.toFixed(2), bx.x1, bx.y1 - 4); }
+        if (B === 2 || B === 5) { ctx.strokeStyle = '#fff'; trace(ctx, f.poly); ctx.stroke(); }
+        if (B === 3 || B === 5) { ctx.fillStyle = '#fff'; for (const p of f.pts) { ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill(); } }
+      }
+    }
+  }
+  // Size the canvas to fit the photo area (it shrinks when a drawer opens).
+  function fit() {
+    if (!out.width) return;
+    const a = $('photoArea'), W = a.clientWidth - 12, H = a.clientHeight - 12, k = Math.min(W / out.width, H / out.height);
+    out.style.width = Math.floor(out.width * k) + 'px'; out.style.height = Math.floor(out.height * k) + 'px';
+  }
+  new ResizeObserver(fit).observe($('photoArea'));
+
+  // ---------- flow ----------
+  // ---------- flow ----------
+  function fileToImage(file) {
+    return new Promise((res, rej) => {
+      const url = URL.createObjectURL(file);
+      const im = new Image();
+      im.onload = () => { URL.revokeObjectURL(url); res(im); };
+      im.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Image illisible')); };
+      im.src = url;
+    });
+  }
+
+  async function process(file) {
+    $('pickMsg').classList.remove('err');
+    $('busy').hidden = false;
+    await new Promise(r => requestAnimationFrame(() => setTimeout(r, 30)));   // let the overlay paint before the heavy work
+    try {
+      const [im] = await Promise.all([fileToImage(file), loadModel()]);
+      const s = Math.min(1, 1600 / Math.max(im.naturalWidth, im.naturalHeight));
+      base.width = Math.round(im.naturalWidth * s);
+      base.height = Math.round(im.naturalHeight * s);
+      base.getContext('2d').drawImage(im, 0, 0, base.width, base.height);
+
+      const t0 = performance.now();
+      // Pass 1 at 1024 px. Crowd (5+ sure faces, or small faces) → pass 2 at full working size, merged by NMS.
+      let boxes = await detectFaces(base, MAX, THRESH);
+      const sure = boxes.filter(b => b.score >= 0.3), widths = sure.map(b => b.x2 - b.x1).sort((a, b) => a - b);
+      const small = widths.length && widths[widths.length >> 1] < base.width * 0.05;
+      if ((sure.length >= 5 || small) && Math.max(base.width, base.height) > MAX) {
+        boxes = nms(boxes.concat(await detectFaces(base, 1600, THRESH)), 0.4);
+      }
+      const t1 = performance.now();
+      faces = [];
+      for (const box of boxes) faces.push({ box, pts: await landmarks(base, box) });   // boxes come sorted by score (NMS)
+      const t2 = performance.now();
+
+      state.nb = countFromSens(); state.sel = {};
+      hist = []; hi = -1; commit();   // keep the current settings; only the history restarts with the new photo
+      render();
+      console.info(`détection ${Math.round(t1 - t0)} ms · contours ${Math.round(t2 - t1)} ms`);
+      for (const id of ['empty']) $(id).hidden = true;
+      for (const id of ['view', 'change', 'undo', 'redo', 'reset', 'bottom']) $(id).hidden = false;
+      for (const f of faces) f.m = null;
+      if (manual) exitManual(false);
+      full = false; $('editScreen').classList.remove('full'); cur.reglages = 0; openDrawer('Reglages'); fit(); render();
+    } catch (err) {
+      $('pickMsg').textContent = 'Erreur : ' + (err && err.message || err); $('pickMsg').classList.add('err'); $('empty').hidden = false; $('view').hidden = true;
+    }
+    $('busy').hidden = true; $('file').value = '';
+  }
+
+  // ---------- wiring ----------
+  buildPanels(); sync();
+  $('file').addEventListener('change', e => { if (e.target.files[0]) process(e.target.files[0]); });
+  $('undo').addEventListener('click', () => { if (hi > 0) restore(hist[--hi]); });
+  $('redo').addEventListener('click', () => { if (hi < hist.length - 1) restore(hist[++hi]); });
+  $('reset').addEventListener('click', () => { state = { ...DEFAULTS, seed: state.seed }; state.nb = countFromSens(); commit(); render(); });
+  for (const b of document.querySelectorAll('#bottom button')) b.addEventListener('click', () => openDrawer(b.dataset.dr));
+  $('drExport').addEventListener('click', e => {
+    const b = e.target.closest('[data-fmt]'); if (!b) return;
+    fmt = b.dataset.fmt; for (const x of $('drExport').querySelectorAll('[data-fmt]')) x.setAttribute('aria-pressed', x.dataset.fmt === fmt);
+  });
+  $('save').addEventListener('click', async () => {
+    // Re-render without the debug overlay, then hand the file over. Canvas export carries no EXIF.
+    const boxes = state.boxes; state.boxes = 0; render(); state.boxes = boxes;
+    const blob = await new Promise(r => out.toBlob(r, fmt === 'png' ? 'image/png' : 'image/jpeg', 0.92));
+    if (boxes) render();
+    const filename = `anonyme.${fmt === 'png' ? 'png' : 'jpg'}`;
+    const dl = window.claude ? await claude.use('downloads') : null;   // claude.ai viewer: share sheet / download prompt
+    if (dl) {
+      try { await dl.save({ filename, data: blob }); $('saveMsg').textContent = 'Enregistré.'; }
+      catch (e) { $('saveMsg').textContent = e.code === 'declined' ? 'Annulé.' : 'Enregistrement impossible : ' + (e.message || e.code); }
+      return;
+    }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename;   // plain web: browser download
+    document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  });
+
+  loadModel().catch(err => { $('pickMsg').textContent = 'Chargement du modèle impossible : ' + (err && err.message || err); $('pickMsg').classList.add('err'); });
+})();
+</script>
+
+</body>
+</html>
